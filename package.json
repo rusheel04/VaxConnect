@@ -1,0 +1,29 @@
+{
+  "type": "module",
+  "name": "vaxconnect",
+  "version": "1.0.0",
+  "description": "AI-powered vaccination planning, travel guidance, and verified vaccine availability using CALL-E.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rusheel04/VaxConnect.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/rusheel04/VaxConnect/issues"
+  },
+  "homepage": "https://github.com/rusheel04/VaxConnect#readme",
+  "dependencies": {
+    "@call-e/calle": "^0.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}
