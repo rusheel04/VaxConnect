@@ -1,20 +1,81 @@
 import { NextResponse } from "next/server";
-
-// Dummy hospital data — replace with a call into your Python CALL-E backend later
-const HOSPITALS = ["City General Hospital", "Sunrise Children's Clinic", "St. Mary's Medical Centre"];
+import { CalleClient } from "@call-e/calle";
 
 export async function POST(req: Request) {
-  const { vaccines } = (await req.json()) as { vaccines: string[] };
+  try {
+    const { vaccines } = (await req.json()) as {
+      vaccines: string[];
+    };
 
-  await new Promise((r) => setTimeout(r, 800)); // simulate call latency
+    if (!vaccines || vaccines.length === 0) {
+      return NextResponse.json(
+        { error: "No vaccines provided" },
+        { status: 400 }
+      );
+    }
 
-  const results = vaccines.map((vaccine) => ({
-    vaccine,
-    hospitals: HOSPITALS.map((hospital) => ({
-      hospital,
-      available: Math.random() > 0.35,
-    })),
-  }));
+    const apiKey = process.env.CALLE_API_KEY;
+    const phone = process.env.CALLE_TEST_PHONE;
 
-  return NextResponse.json({ results });
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "CALLE_API_KEY is missing" },
+        { status: 500 }
+      );
+    }
+
+    if (!phone) {
+      return NextResponse.json(
+        { error: "CALLE_TEST_PHONE is missing" },
+        { status: 500 }
+      );
+    }
+
+    const client = new CalleClient({
+      apiKey,
+    });
+
+    const call = await client.calls.create({
+      task: `Call the authorized test recipient and ask about vaccine availability.
+
+The vaccines we are checking are: ${vaccines.join(", ")}.
+
+Explain that you are calling from VaxConnect.
+Ask whether these vaccines are currently available.
+Be polite and clearly summarize the answer.`,
+      recipients: [
+        {
+          phones: [phone],
+        },
+      ],
+    });
+
+    console.log("CALL-E call created:", call);
+
+    if (!call?.id) {
+      console.error("CALL-E did not return a call id:", call);
+      return NextResponse.json(
+        { error: "CALL-E did not return a call id" },
+        { status: 502 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      callId: call.id,
+      message: "CALL-E call started successfully.",
+    });
+  } catch (error) {
+    console.error("CALL-E ERROR:", error);
+
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unknown CALL-E error",
+      },
+      { status: 500 }
+    );
+  }
 }
