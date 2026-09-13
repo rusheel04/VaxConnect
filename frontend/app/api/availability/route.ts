@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { CalleClient } from "@call-e/calle";
 
-const DEMO_PIN = "560001";
-
 type TranscriptTurn = {
     speaker?: string;
     text?: string;
@@ -37,8 +35,7 @@ function extractAvailability(result: any): AvailabilityResult {
             continue;
         }
 
-        const question =
-            current.text.toLowerCase();
+        const question = current.text.toLowerCase();
 
         let answer = "";
 
@@ -47,7 +44,10 @@ function extractAvailability(result: any): AvailabilityResult {
                 turns[j].speaker === "user" &&
                 turns[j].text
             ) {
-                answer = turns[j].text.trim();
+                answer = String(
+                    turns[j].text ?? ""
+                ).trim();
+
                 break;
             }
         }
@@ -60,17 +60,25 @@ function extractAvailability(result: any): AvailabilityResult {
             answer.toLowerCase();
 
         if (
-            question.includes("currently available")
+            question.includes(
+                "currently available"
+            )
         ) {
             if (
-                answerLower.includes("not available") ||
-                answerLower.includes("unavailable") ||
+                answerLower.includes(
+                    "not available"
+                ) ||
+                answerLower.includes(
+                    "unavailable"
+                ) ||
                 answerLower === "no" ||
                 answerLower.startsWith("no ")
             ) {
                 available = false;
             } else if (
-                answerLower.includes("available") ||
+                answerLower.includes(
+                    "available"
+                ) ||
                 answerLower === "yes" ||
                 answerLower.startsWith("yes ")
             ) {
@@ -79,11 +87,14 @@ function extractAvailability(result: any): AvailabilityResult {
         }
 
         if (
-            question.includes("what is the price")
+            question.includes(
+                "what is the price"
+            ) ||
+            question.includes("price")
         ) {
             const priceMatch =
                 answer.match(
-                    /₹\s?[\d,]+(?:\.\d+)?|Rs\.?\s?[\d,]+(?:\.\d+)?/i
+                    /₹\s?[\d,]+(?:\.\d+)?|Rs\.?\s?[\d,]+(?:\.\d+)?|\b\d+(?:,\d+)*(?:\.\d+)?\s?(?:rupees|rs)\b/i
                 );
 
             price =
@@ -92,8 +103,11 @@ function extractAvailability(result: any): AvailabilityResult {
         }
 
         if (
-            question.includes("appointment required") ||
-            question.includes("walk-in")
+            question.includes(
+                "appointment required"
+            ) ||
+            question.includes("walk-in") ||
+            question.includes("walk in")
         ) {
             if (
                 answerLower.includes(
@@ -128,13 +142,9 @@ function extractAvailability(result: any): AvailabilityResult {
         }
     }
 
-    /*
-     * Fallback to CALL-E summary if transcript
-     * parsing missed anything.
-     */
-
     const summary =
-        typeof result?.summary === "string"
+        typeof result?.summary ===
+        "string"
             ? result.summary
             : "";
 
@@ -143,7 +153,9 @@ function extractAvailability(result: any): AvailabilityResult {
 
     if (
         !available &&
-        summaryLower.includes("available") &&
+        summaryLower.includes(
+            "available"
+        ) &&
         !summaryLower.includes(
             "not available"
         ) &&
@@ -154,10 +166,12 @@ function extractAvailability(result: any): AvailabilityResult {
         available = true;
     }
 
-    if (price === "Not provided") {
+    if (
+        price === "Not provided"
+    ) {
         const summaryPrice =
             summary.match(
-                /₹\s?[\d,]+(?:\.\d+)?|Rs\.?\s?[\d,]+(?:\.\d+)?/i
+                /₹\s?[\d,]+(?:\.\d+)?|Rs\.?\s?[\d,]+(?:\.\d+)?|\b\d+(?:,\d+)*(?:\.\d+)?\s?(?:rupees|rs)\b/i
             );
 
         if (summaryPrice) {
@@ -167,7 +181,8 @@ function extractAvailability(result: any): AvailabilityResult {
     }
 
     if (
-        appointmentRequired === "Unknown"
+        appointmentRequired ===
+        "Unknown"
     ) {
         if (
             summaryLower.includes(
@@ -198,7 +213,7 @@ function extractAvailability(result: any): AvailabilityResult {
     ) {
         const timeMatch =
             summary.match(
-                /(?:tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday)[^.]*/i
+                /(?:today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)[^.]*/i
             );
 
         if (timeMatch) {
@@ -211,49 +226,43 @@ function extractAvailability(result: any): AvailabilityResult {
         available,
         price,
         appointment_required:
-        appointmentRequired,
+            appointmentRequired,
         earliest_availability:
-        earliestAvailability,
+            earliestAvailability,
     };
 }
 
 async function makeAvailabilityCall(
     client: CalleClient,
-    demoPhone: string,
+    providerPhone: string,
     vaccine: string,
     pinCode: string
 ) {
-    /*
-     * PIN is intentionally NOT mentioned to the provider.
-     *
-     * VaxConnect collects the PIN from the user for the
-     * application's search flow. The provider only needs
-     * to answer vaccine availability questions.
-     */
-
     const task = `
 You are calling a vaccination provider on behalf of VaxConnect.
 
 This is an AVAILABILITY enquiry only.
 
-DO NOT make an appointment.
-DO NOT book anything.
-DO NOT provide medical advice.
+Do NOT make an appointment.
+Do NOT book anything.
+Do NOT provide medical advice.
 
-Vaccine requested:
+The vaccine the user wants information about is:
+
 ${vaccine}
 
-Ask the provider these four questions:
+Ask the provider these questions:
 
 1. Is the ${vaccine} vaccine currently available?
 2. What is the price?
 3. Is an appointment required, or is walk-in vaccination possible?
 4. What is the earliest available vaccination date and time?
 
-Ask these questions naturally and clearly.
+Ask the questions naturally and clearly.
 
-IMPORTANT:
-- Do not mention or ask about a PIN code.
+Important rules:
+
+- Do not mention the user's PIN code.
 - Only report information the provider actually gives you.
 - Never guess availability.
 - Never guess the price.
@@ -272,15 +281,19 @@ After collecting the information, thank the provider and end the call.
 
             recipients: [
                 {
-                    phones: [demoPhone],
+                    phones: [
+                        providerPhone,
+                    ],
                     region: "IN",
                     locale: "en-IN",
                 },
             ],
 
             metadata: {
-                application: "vaxconnect",
-                operation: "availability",
+                application:
+                    "vaxconnect",
+                operation:
+                    "availability",
                 vaccine,
                 pinCode,
             },
@@ -302,75 +315,126 @@ export async function POST(
             await request.json();
 
         const vaccine =
-            typeof body.vaccine === "string" &&
-            body.vaccine.trim()
+            typeof body.vaccine ===
+            "string"
                 ? body.vaccine.trim()
                 : "";
 
         const pinCode =
-            typeof body.pinCode === "string" &&
-            body.pinCode.trim()
+            typeof body.pinCode ===
+            "string"
                 ? body.pinCode.trim()
-                : DEMO_PIN;
+                : "";
+
+        /*
+         * Use the same real CALL-E test
+         * phone that was used successfully
+         * during your earlier CALL-E testing.
+         *
+         * The browser can optionally send
+         * providerPhone, but normally we use
+         * the server-side environment variable.
+         */
+        const providerPhone =
+            typeof body.providerPhone ===
+            "string" &&
+            body.providerPhone.trim()
+                ? body.providerPhone.trim()
+                : process.env
+                      .CALLE_TEST_PHONE
+                      ?.trim() ?? "";
 
         if (!vaccine) {
             return NextResponse.json(
                 {
                     error:
-                        "Vaccine is required",
+                        "Vaccine is required.",
                 },
-                { status: 400 }
+                {
+                    status: 400,
+                }
+            );
+        }
+
+        if (
+            !/^\d{6}$/.test(
+                pinCode
+            )
+        ) {
+            return NextResponse.json(
+                {
+                    error:
+                        "A valid 6-digit PIN code is required.",
+                },
+                {
+                    status: 400,
+                }
+            );
+        }
+
+        if (!providerPhone) {
+            return NextResponse.json(
+                {
+                    error:
+                        "CALLE_TEST_PHONE is not configured in .env.",
+                },
+                {
+                    status: 500,
+                }
+            );
+        }
+
+        if (
+            !/^\+[1-9]\d{7,14}$/.test(
+                providerPhone
+            )
+        ) {
+            return NextResponse.json(
+                {
+                    error:
+                        "CALLE_TEST_PHONE must be a valid E.164 phone number, for example +919876543210.",
+                },
+                {
+                    status: 500,
+                }
             );
         }
 
         const apiKey =
             process.env.CALLE_API_KEY;
 
-        const demoPhone =
-            process.env.DEMO_PROVIDER_PHONE;
-
         if (!apiKey) {
             return NextResponse.json(
                 {
                     error:
-                        "CALLE_API_KEY is not configured",
+                        "CALLE_API_KEY is not configured.",
                 },
-                { status: 500 }
+                {
+                    status: 500,
+                }
             );
         }
 
-        if (!demoPhone) {
-            return NextResponse.json(
-                {
-                    error:
-                        "DEMO_PROVIDER_PHONE is not configured",
-                },
-                { status: 500 }
-            );
-        }
+        const baseUrl =
+            process.env.CALLE_BASE_URL;
 
-        if (
-            !/^\+[1-9]\d{7,14}$/.test(
-                demoPhone
-            )
-        ) {
+        if (!baseUrl) {
             return NextResponse.json(
                 {
                     error:
-                        "DEMO_PROVIDER_PHONE must be a valid E.164 phone number.",
+                        "CALLE_BASE_URL is not configured.",
                 },
-                { status: 500 }
+                {
+                    status: 500,
+                }
             );
         }
 
         const client =
             new CalleClient({
                 apiKey,
+                baseUrl,
             });
-
-        /*
-         * FIRST ATTEMPT
-         */
 
         console.log(
             "========== CALL-E AVAILABILITY ATTEMPT 1 =========="
@@ -379,7 +443,7 @@ export async function POST(
         let result =
             await makeAvailabilityCall(
                 client,
-                demoPhone,
+                providerPhone,
                 vaccine,
                 pinCode
             );
@@ -392,20 +456,14 @@ export async function POST(
             )
         );
 
-        /*
-         * If CALL-E fails before the conversation starts,
-         * retry the phone call once.
-         *
-         * This specifically handles intermittent 404/408
-         * connection/no-answer failures.
-         */
-
         if (
-            result.status === "failed"
+            result.status ===
+            "failed"
         ) {
             const failureCode =
                 result.failureCode ??
-                result.recipients?.[0]
+                result
+                    .recipients?.[0]
                     ?.attempts?.[0]
                     ?.failureCode ??
                 null;
@@ -413,10 +471,6 @@ export async function POST(
             console.log(
                 `CALL-E first attempt failed with ${failureCode}. Retrying once...`
             );
-
-            /*
-             * Small delay before retry.
-             */
 
             await new Promise(
                 (resolve) =>
@@ -433,7 +487,7 @@ export async function POST(
             result =
                 await makeAvailabilityCall(
                     client,
-                    demoPhone,
+                    providerPhone,
                     vaccine,
                     pinCode
                 );
@@ -447,29 +501,9 @@ export async function POST(
             );
         }
 
-        console.log(
-            "========== FINAL CALL-E AVAILABILITY RESULT =========="
-        );
-
-        console.log(
-            JSON.stringify(
-                result,
-                null,
-                2
-            )
-        );
-
-        console.log(
-            "======================================================="
-        );
-
-        /*
-         * If both attempts failed, return the real
-         * CALL-E failure to the frontend.
-         */
-
         if (
-            result.status === "failed"
+            result.status ===
+            "failed"
         ) {
             return NextResponse.json(
                 {
@@ -506,13 +540,15 @@ export async function POST(
                             null,
                     },
                 },
-                { status: 502 }
+                {
+                    status: 502,
+                }
             );
         }
 
         if (
             result.status !==
-            "completed" ||
+                "completed" ||
             !result.taskCompleted
         ) {
             return NextResponse.json(
@@ -538,111 +574,67 @@ export async function POST(
                             null,
                     },
                 },
-                { status: 502 }
+                {
+                    status: 502,
+                }
             );
         }
 
-        /*
-         * CALL-E completed successfully.
-         *
-         * Extract the answers from the actual
-         * conversation.
-         */
-
-        const liveResult =
+        const availability =
             extractAvailability(
                 result
             );
 
         /*
-         * REAL CALL-E PROVIDER
+         * Return one real provider result.
+         * No fake/demo providers.
          */
+        const provider = {
+            hospital:
+                "CALL-E Contacted Provider",
 
-        const providers = [
-            {
-                hospital:
-                    "CALL-E Verified Demo Provider",
+            provider_id:
+                result.id ??
+                providerPhone,
 
-                provider_id:
-                    "calle-live-provider",
+            available:
+                availability.available,
 
-                available:
-                liveResult.available,
+            price:
+                availability.price,
 
-                price:
-                liveResult.price,
+            appointment_required:
+                availability.appointment_required,
 
-                appointment_required:
-                liveResult.appointment_required,
+            earliest_availability:
+                availability.earliest_availability,
 
-                earliest_availability:
-                liveResult.earliest_availability,
-
-                source:
-                    "CALL-E VERIFIED" as const,
-            },
-
-            /*
-             * DEMO PROVIDER
-             *
-             * Not contacted.
-             */
-
-            {
-                hospital:
-                    "Demo Vaccination Centre",
-
-                provider_id:
-                    "demo-vaccination-centre",
-
-                available: true,
-
-                price: "₹700",
-
-                appointment_required:
-                    "Yes",
-
-                earliest_availability:
-                    "Tomorrow, 11:30 AM",
-
-                source:
-                    "DEMO PROVIDER" as const,
-            },
-
-            /*
-             * DEMO PROVIDER
-             *
-             * Not contacted.
-             */
-
-            {
-                hospital:
-                    "Demo Community Clinic",
-
-                provider_id:
-                    "demo-community-clinic",
-
-                available: false,
-
-                price: "—",
-
-                appointment_required:
-                    "—",
-
-                earliest_availability:
-                    "Currently unavailable",
-
-                source:
-                    "DEMO PROVIDER" as const,
-            },
-        ];
+            source:
+                "CALL-E VERIFIED" as const,
+        };
 
         return NextResponse.json({
+            success: true,
+
             vaccine,
 
             pinCode,
 
-            providers,
+            provider: {
+                phone:
+                    providerPhone,
+            },
+
+            availability,
+
+            /*
+             * The page expects providers,
+             * so give it one real CALL-E
+             * provider result.
+             */
+            providers: [
+                provider,
+            ],
 
             call: {
                 id:
@@ -678,9 +670,11 @@ export async function POST(
                 error:
                     error instanceof Error
                         ? error.message
-                        : "Failed to execute CALL-E availability enquiry",
+                        : "Failed to execute CALL-E availability enquiry.",
             },
-            { status: 500 }
+            {
+                status: 500,
+            }
         );
     }
 }

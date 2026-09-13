@@ -12,497 +12,456 @@ type Provider = {
     price: string;
     appointment_required: string;
     earliest_availability: string;
-    source: "CALL-E VERIFIED" | "DEMO PROVIDER";
+    source: "CALL-E VERIFIED";
 };
 
 export default function AvailabilityPage() {
     const router = useRouter();
 
     const {
-        child,
-        travel,
-        generalPinCode,
         selectedVaccine,
+        generalPinCode,
+        travel,
+        child,
         setSelectedProvider,
     } = useFlow();
 
-    const [providers, setProviders] =
-        useState<Provider[]>([]);
-
-    const [calling, setCalling] =
-        useState(false);
-
-    const [called, setCalled] =
+    const [loading, setLoading] =
         useState(false);
 
     const [error, setError] =
         useState("");
 
-    async function handleCallProviders() {
-        if (!selectedVaccine || calling) {
-            return;
-        }
+    const [providers, setProviders] =
+        useState<Provider[]>([]);
 
-        /*
-         * Determine which PIN belongs to the current flow.
-         *
-         * Child flow    → child.pinCode
-         * Travel flow   → travel.pinCode
-         * Vaccine Hub   → generalPinCode
-         * AI flow       → generalPinCode
-         */
+    const [hasSearched, setHasSearched] =
+        useState(false);
 
-        const pinCode =
-            generalPinCode ||
-            travel.pinCode ||
-            child.pinCode ||
-            "";
+    const pinCode =
+        generalPinCode ||
+        travel?.pinCode ||
+        child?.pinCode ||
+        "";
 
-        if (!/^\d{6}$/.test(pinCode)) {
-            setError(
-                "A valid 6-digit PIN code is required."
-            );
-            return;
-        }
+    const handleCallProviders =
+        async () => {
+            setError("");
+            setProviders([]);
+            setHasSearched(false);
 
-        setCalling(true);
-        setError("");
-
-        try {
-            const res = await fetch(
-                "/api/availability",
-                {
-                    method: "POST",
-
-                    headers: {
-                        "Content-Type":
-                            "application/json",
-                    },
-
-                    body: JSON.stringify({
-                        vaccine: selectedVaccine,
-                        pinCode,
-                    }),
-                }
-            );
-
-            const data =
-                await res.json();
-
-            if (!res.ok) {
-                throw new Error(
-                    data.details ||
-                    data.error ||
-                    "Availability enquiry failed."
+            if (!selectedVaccine) {
+                setError(
+                    "Please select a vaccine first."
                 );
+                return;
             }
 
-            setProviders(
-                data.providers || []
-            );
+            if (!/^\d{6}$/.test(pinCode)) {
+                setError(
+                    "Please enter a valid 6-digit PIN code."
+                );
+                return;
+            }
 
-            setCalled(true);
-        } catch (error) {
-            console.error(
-                "Availability enquiry error:",
-                error
-            );
+            setLoading(true);
 
-            setError(
-                error instanceof Error
-                    ? error.message
-                    : "Unable to check availability."
-            );
-        } finally {
-            setCalling(false);
-        }
-    }
+            try {
+                console.log(
+                    "Calling VaxConnect availability API..."
+                );
 
-    function handleBook(
+                console.log(
+                    "Vaccine:",
+                    selectedVaccine
+                );
+
+                console.log(
+                    "PIN:",
+                    pinCode
+                );
+
+                /*
+                 * IMPORTANT:
+                 *
+                 * Do NOT access CALLE_API_KEY,
+                 * CALLE_TEST_PHONE or any other
+                 * secret environment variable here.
+                 *
+                 * This page runs in the browser.
+                 *
+                 * The API route on the server handles
+                 * the actual CALL-E call.
+                 */
+                const response =
+                    await fetch(
+                        "/api/availability",
+                        {
+                            method: "POST",
+
+                            headers: {
+                                "Content-Type":
+                                    "application/json",
+                            },
+
+                            body: JSON.stringify({
+                                vaccine:
+                                    selectedVaccine,
+
+                                pinCode,
+                            }),
+                        }
+                    );
+
+                let data: any = null;
+
+                try {
+                    data =
+                        await response.json();
+                } catch {
+                    data = null;
+                }
+
+                console.log(
+                    "Availability API response:",
+                    data
+                );
+
+                if (!response.ok) {
+                    throw new Error(
+                        data?.error ||
+                            "Availability enquiry failed."
+                    );
+                }
+
+                if (
+                    !data ||
+                    !Array.isArray(
+                        data.providers
+                    )
+                ) {
+                    throw new Error(
+                        "CALL-E returned an invalid availability response."
+                    );
+                }
+
+                const realProviders =
+                    data.providers.filter(
+                        (provider: any) =>
+                            provider &&
+                            provider.source ===
+                                "CALL-E VERIFIED"
+                    );
+
+                setProviders(
+                    realProviders
+                );
+
+                setHasSearched(true);
+
+                if (
+                    realProviders.length ===
+                    0
+                ) {
+                    setError(
+                        "CALL-E completed the enquiry, but no provider availability result was returned."
+                    );
+                }
+            } catch (err) {
+                console.error(
+                    "Availability enquiry error:",
+                    err
+                );
+
+                setError(
+                    err instanceof Error
+                        ? err.message
+                        : "Availability enquiry failed."
+                );
+
+                setProviders([]);
+                setHasSearched(true);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+    const handleBook = (
         provider: Provider
-    ) {
-        if (!provider.available) {
-            return;
-        }
-
-        setSelectedProvider({
-            hospital:
-            provider.hospital,
-
-            price:
-            provider.price,
-
-            appointment_required:
-            provider.appointment_required,
-
-            earliest_availability:
-            provider.earliest_availability,
-        });
+    ) => {
+        setSelectedProvider(
+            provider
+        );
 
         router.push(
             "/appointment"
         );
-    }
-
-    /*
-     * No vaccine selected.
-     */
-
-    if (!selectedVaccine) {
-        return (
-            <AppShell>
-                <div className="mb-8">
-                    <p className="text-xs text-teal font-medium tracking-wide mb-2">
-                        VAXCONNECT · AVAILABILITY
-                    </p>
-
-                    <h1 className="font-display text-2xl text-ink mb-2">
-                        Check Availability
-                    </h1>
-
-                    <p className="text-sm text-ink/60">
-                        No vaccine has been selected yet.
-                    </p>
-                </div>
-
-                <button
-                    onClick={() =>
-                        router.push(
-                            "/vaccine-assistant"
-                        )
-                    }
-                    className="bg-teal text-white rounded-md px-5 py-2.5 text-sm font-medium hover:bg-teal-dark"
-                >
-                    Choose a Vaccine →
-                </button>
-            </AppShell>
-        );
-    }
+    };
 
     return (
         <AppShell>
-            {/* HEADER */}
+            <div className="space-y-6">
+                {/* Header */}
+                <div>
+                    <h1 className="text-2xl font-bold">
+                        Vaccine Availability
+                    </h1>
 
-            <div className="mb-8">
-                <p className="text-xs text-teal font-medium tracking-wide mb-2">
-                    VAXCONNECT · AVAILABILITY
-                </p>
-
-                <h1 className="font-display text-3xl text-ink mb-2">
-                    Check Availability
-                </h1>
-
-                <p className="text-sm text-ink/60 max-w-2xl leading-relaxed">
-                    Let VaxConnect contact a provider
-                    and check availability for your
-                    selected vaccine.
-                </p>
-            </div>
-
-            {/* SELECTED VACCINE */}
-
-            <div className="max-w-4xl border border-teal/30 bg-teal/5 rounded-xl p-6 mb-6">
-                <p className="text-xs text-teal font-medium tracking-wide mb-3">
-                    SELECTED VACCINE
-                </p>
-
-                <div className="flex items-center justify-between gap-5">
-                    <div>
-                        <h2 className="font-display text-2xl text-ink">
-                            💉 {selectedVaccine}
-                        </h2>
-
-                        <p className="text-sm text-ink/55 mt-1">
-                            VaxConnect will use CALL-E
-                            to make a live availability
-                            enquiry.
-                        </p>
-                    </div>
-
-                    {!called && (
-                        <button
-                            onClick={
-                                handleCallProviders
-                            }
-                            disabled={calling}
-                            className="shrink-0 bg-teal text-white rounded-md px-5 py-3 text-sm font-medium hover:bg-teal-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            {calling
-                                ? "CALL-E is calling…"
-                                : "Call to Check Availability →"}
-                        </button>
-                    )}
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Contact a vaccination
+                        provider through
+                        CALL-E to check
+                        real-time availability.
+                    </p>
                 </div>
-            </div>
 
-            {/* CALLING */}
+                {/* Search / vaccine information */}
+                <div className="rounded-xl border bg-card p-6 shadow-sm">
+                    <div className="grid gap-5 md:grid-cols-2">
+                        <div>
+                            <label className="mb-2 block text-sm font-medium">
+                                Selected Vaccine
+                            </label>
 
-            {calling && (
-                <div className="max-w-4xl border border-teal/30 bg-teal/5 rounded-xl p-5 mb-6">
-                    <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-teal/10 flex items-center justify-center">
-                            📞
+                            <div className="rounded-lg border bg-muted/30 px-4 py-3">
+                                {selectedVaccine ||
+                                    "No vaccine selected"}
+                            </div>
                         </div>
 
                         <div>
-                            <p className="text-sm font-medium text-ink">
-                                CALL-E is contacting the
-                                provider…
-                            </p>
+                            <label className="mb-2 block text-sm font-medium">
+                                PIN Code
+                            </label>
 
-                            <p className="text-xs text-ink/50 mt-1">
-                                Checking availability,
-                                price, appointment
-                                requirements, and earliest
-                                vaccination time.
-                            </p>
+                            <div className="rounded-lg border bg-muted/30 px-4 py-3">
+                                {pinCode ||
+                                    "No PIN code provided"}
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
 
-            {/* ERROR */}
-
-            {error && (
-                <div className="max-w-4xl border border-red-200 bg-red-50 rounded-xl p-5 mb-6">
-                    <p className="text-sm font-medium text-red-700 mb-1">
-                        Availability enquiry failed
-                    </p>
-
-                    <p className="text-xs text-red-600/80 leading-relaxed">
-                        {error}
-                    </p>
+                    {error && (
+                        <div className="mt-5 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
+                            {error}
+                        </div>
+                    )}
 
                     <button
+                        type="button"
                         onClick={
                             handleCallProviders
                         }
-                        disabled={calling}
-                        className="mt-4 border border-red-200 bg-white rounded-md px-4 py-2 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        disabled={
+                            loading ||
+                            !selectedVaccine ||
+                            !/^\d{6}$/.test(
+                                pinCode
+                            )
+                        }
+                        className="mt-6 rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                        Try Again
+                        {loading
+                            ? "Calling Provider..."
+                            : "Call to Check Availability"}
                     </button>
                 </div>
-            )}
 
-            {/* RESULTS */}
-
-            {called &&
-                providers.length > 0 && (
-                    <section className="max-w-4xl">
-                        <div className="mb-4">
-                            <p className="text-xs text-ink/40 uppercase tracking-wide mb-1">
-                                PROVIDER RESULTS
-                            </p>
-
-                            <h2 className="font-display text-xl text-ink">
-                                {selectedVaccine} availability
-                            </h2>
-
-                            <p className="text-xs text-ink/50 mt-1">
-                                One provider was verified
-                                through a live CALL-E
-                                enquiry. The other
-                                providers are clearly
-                                marked as demo providers.
-                            </p>
-                        </div>
-
-                        <div className="border border-line rounded-xl overflow-hidden bg-white/40">
-                            {/* TABLE HEADER */}
-
-                            <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_1.3fr_1.5fr_1.2fr] gap-4 px-5 py-3 border-b border-line bg-paper-dim">
-                                <p className="text-[10px] text-ink/40 uppercase tracking-wide">
-                                    Provider
-                                </p>
-
-                                <p className="text-[10px] text-ink/40 uppercase tracking-wide">
-                                    Availability
-                                </p>
-
-                                <p className="text-[10px] text-ink/40 uppercase tracking-wide">
-                                    Price
-                                </p>
-
-                                <p className="text-[10px] text-ink/40 uppercase tracking-wide">
-                                    Appointment
-                                </p>
-
-                                <p className="text-[10px] text-ink/40 uppercase tracking-wide">
-                                    Earliest
-                                </p>
-
-                                <p className="text-[10px] text-ink/40 uppercase tracking-wide">
-                                    Action
-                                </p>
-                            </div>
-
-                            {/* ROWS */}
-
-                            {providers.map(
-                                (
-                                    provider,
-                                    index
-                                ) => (
-                                    <div
-                                        key={
-                                            provider.provider_id
-                                        }
-                                        className={`grid md:grid-cols-[2fr_1fr_1fr_1.3fr_1.5fr_1.2fr] gap-4 px-5 py-5 ${
-                                            index <
-                                            providers.length -
-                                            1
-                                                ? "border-b border-line"
-                                                : ""
-                                        }`}
-                                    >
-                                        {/* PROVIDER */}
-
-                                        <div>
-                                            <p className="text-sm font-medium text-ink">
-                                                🏥{" "}
-                                                {
-                                                    provider.hospital
-                                                }
-                                            </p>
-
-                                            <span
-                                                className={`inline-flex mt-2 text-[9px] font-medium tracking-wide rounded-full px-2 py-1 ${
-                                                    provider.source ===
-                                                    "CALL-E VERIFIED"
-                                                        ? "bg-teal/10 text-teal"
-                                                        : "bg-ink/5 text-ink/45"
-                                                }`}
-                                            >
-                                                {
-                                                    provider.source
-                                                }
-                                            </span>
-                                        </div>
-
-                                        {/* AVAILABILITY */}
-
-                                        <div>
-                                            <p
-                                                className={`text-sm font-medium ${
-                                                    provider.available
-                                                        ? "text-emerald-700"
-                                                        : "text-red-600"
-                                                }`}
-                                            >
-                                                {provider.available
-                                                    ? "● Available"
-                                                    : "● Unavailable"}
-                                            </p>
-                                        </div>
-
-                                        {/* PRICE */}
-
-                                        <div>
-                                            <p className="text-sm font-medium text-ink">
-                                                {
-                                                    provider.price
-                                                }
-                                            </p>
-                                        </div>
-
-                                        {/* APPOINTMENT */}
-
-                                        <div>
-                                            <p className="text-sm text-ink/70">
-                                                {
-                                                    provider.appointment_required
-                                                }
-                                            </p>
-                                        </div>
-
-                                        {/* EARLIEST */}
-
-                                        <div>
-                                            <p className="text-sm text-ink/70">
-                                                {
-                                                    provider.earliest_availability
-                                                }
-                                            </p>
-                                        </div>
-
-                                        {/* ACTION */}
-
-                                        <div>
-                                            {provider.available ? (
-                                                <button
-                                                    onClick={() =>
-                                                        handleBook(
-                                                            provider
-                                                        )
-                                                    }
-                                                    className="bg-teal text-white rounded-md px-3 py-2 text-xs font-medium hover:bg-teal-dark transition-colors"
-                                                >
-                                                    Book Appointment
-                                                </button>
-                                            ) : (
-                                                <span className="text-xs text-ink/35">
-                                                    Not available
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                )
-                            )}
-                        </div>
-
-                        {/* DISCLOSURE */}
-
-                        <div className="mt-4 border border-line bg-white/30 rounded-lg p-4">
-                            <p className="text-xs text-ink/50 leading-relaxed">
-                                <strong className="text-ink/70">
-                                    Demo disclosure:
-                                </strong>{" "}
-                                <strong className="text-teal">
-                                    CALL-E VERIFIED
-                                </strong>{" "}
-                                represents the live
-                                provider response returned
-                                by CALL-E.{" "}
-                                <strong>
-                                    DEMO PROVIDER
-                                </strong>{" "}
-                                rows are demonstration
-                                data and were not contacted.
-                            </p>
-                        </div>
-                    </section>
-                )}
-
-            {/* BEFORE CALL */}
-
-            {!called &&
-                !calling &&
-                !error && (
-                    <div className="max-w-4xl border border-line bg-white/30 rounded-xl p-6">
-                        <div className="flex items-start gap-4">
-                            <div className="w-9 h-9 rounded-full bg-teal/10 flex items-center justify-center shrink-0">
-                                📞
-                            </div>
+                {/* Loading state */}
+                {loading && (
+                    <div className="rounded-xl border bg-card p-6 shadow-sm">
+                        <div className="flex items-center gap-3">
+                            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
 
                             <div>
-                                <p className="text-sm font-medium text-ink mb-1">
-                                    Ready to check providers?
+                                <p className="font-medium">
+                                    CALL-E is contacting
+                                    the provider
                                 </p>
 
-                                <p className="text-xs text-ink/50 leading-relaxed">
-                                    Click{" "}
-                                    <strong className="text-ink/70">
-                                        Call to Check
-                                        Availability
-                                    </strong>{" "}
-                                    to start the live
-                                    CALL-E enquiry.
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    Please wait while
+                                    VaxConnect checks
+                                    vaccine availability,
+                                    price, appointment
+                                    requirements and
+                                    earliest availability.
                                 </p>
                             </div>
                         </div>
                     </div>
                 )}
+
+                {/* Results */}
+                {hasSearched &&
+                    !loading &&
+                    providers.length >
+                        0 && (
+                        <div className="space-y-4">
+                            <div>
+                                <h2 className="text-xl font-semibold">
+                                    Availability Results
+                                </h2>
+
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    This information was
+                                    obtained from a real
+                                    CALL-E provider enquiry.
+                                </p>
+                            </div>
+
+                            <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead className="border-b bg-muted/40">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left font-semibold">
+                                                    Provider
+                                                </th>
+
+                                                <th className="px-4 py-3 text-left font-semibold">
+                                                    Availability
+                                                </th>
+
+                                                <th className="px-4 py-3 text-left font-semibold">
+                                                    Price
+                                                </th>
+
+                                                <th className="px-4 py-3 text-left font-semibold">
+                                                    Appointment
+                                                </th>
+
+                                                <th className="px-4 py-3 text-left font-semibold">
+                                                    Earliest
+                                                </th>
+
+                                                <th className="px-4 py-3 text-left font-semibold">
+                                                    Source
+                                                </th>
+
+                                                <th className="px-4 py-3 text-left font-semibold">
+                                                    Action
+                                                </th>
+                                            </tr>
+                                        </thead>
+
+                                        <tbody>
+                                            {providers.map(
+                                                (
+                                                    provider,
+                                                    index
+                                                ) => (
+                                                    <tr
+                                                        key={
+                                                            provider.provider_id ||
+                                                            index
+                                                        }
+                                                        className="border-b last:border-b-0"
+                                                    >
+                                                        <td className="px-4 py-4 font-medium">
+                                                            {
+                                                                provider.hospital
+                                                            }
+                                                        </td>
+
+                                                        <td className="px-4 py-4">
+                                                            <span
+                                                                className={
+                                                                    provider.available
+                                                                        ? "font-medium text-green-600"
+                                                                        : "font-medium text-red-600"
+                                                                }
+                                                            >
+                                                                {provider.available
+                                                                    ? "Available"
+                                                                    : "Not available"}
+                                                            </span>
+                                                        </td>
+
+                                                        <td className="px-4 py-4">
+                                                            {
+                                                                provider.price
+                                                            }
+                                                        </td>
+
+                                                        <td className="px-4 py-4">
+                                                            {
+                                                                provider.appointment_required
+                                                            }
+                                                        </td>
+
+                                                        <td className="px-4 py-4">
+                                                            {
+                                                                provider.earliest_availability
+                                                            }
+                                                        </td>
+
+                                                        <td className="px-4 py-4">
+                                                            <span className="inline-flex rounded-full border px-3 py-1 text-xs font-semibold">
+                                                                CALL-E VERIFIED
+                                                            </span>
+                                                        </td>
+
+                                                        <td className="px-4 py-4">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    handleBook(
+                                                                        provider
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    !provider.available
+                                                                }
+                                                                className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                                                            >
+                                                                Book
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                )
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div className="rounded-lg border bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+                                <strong>
+                                    CALL-E VERIFIED:
+                                </strong>{" "}
+                                The provider information
+                                displayed above comes from
+                                the live CALL-E availability
+                                enquiry. VaxConnect does not
+                                generate or invent provider
+                                availability, pricing,
+                                appointment requirements or
+                                dates.
+                            </div>
+                        </div>
+                    )}
+
+                {/* No result */}
+                {hasSearched &&
+                    !loading &&
+                    providers.length ===
+                        0 &&
+                    !error && (
+                        <div className="rounded-xl border bg-card p-6 shadow-sm">
+                            <h2 className="font-semibold">
+                                No availability result
+                                returned
+                            </h2>
+
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                CALL-E completed the
+                                enquiry but there was no
+                                provider result to display.
+                            </p>
+                        </div>
+                    )}
+            </div>
         </AppShell>
     );
 }
