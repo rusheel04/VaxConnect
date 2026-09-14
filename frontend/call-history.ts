@@ -6,6 +6,8 @@ export type CallHistoryRecord = {
     status: string;
     createdAt: string;
     summary: string;
+    patientName?: string;
+    patientPhone?: string;
 };
 
 const STORAGE_KEY = "vaxconnect_call_history";

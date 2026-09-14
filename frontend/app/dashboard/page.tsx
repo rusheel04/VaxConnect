@@ -43,8 +43,8 @@ export default function Dashboard() {
 
                 <Card
                     href="/history"
-                    icon="📞"
-                    title="Call History"
+                    icon="📖"
+                    title="Booking History"
                     body="View provider calls and appointment activity."
                     cta="View History"
                 />

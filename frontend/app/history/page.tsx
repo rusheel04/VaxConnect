@@ -77,6 +77,24 @@ export default function HistoryPage() {
                                     <p className="text-sm text-ink/70">
                                         🏥 {record.hospital}
                                     </p>
+
+                                    {record.type ===
+                                        "appointment" &&
+                                        record.patientName && (
+                                            <p className="text-sm text-ink/70">
+                                                👤{" "}
+                                                {record.patientName}
+                                            </p>
+                                        )}
+
+                                    {record.type ===
+                                        "appointment" &&
+                                        record.patientPhone && (
+                                            <p className="text-sm text-ink/70">
+                                                📞{" "}
+                                                {record.patientPhone}
+                                            </p>
+                                        )}
                                 </div>
 
                                 <span
@@ -95,14 +113,10 @@ export default function HistoryPage() {
                             </div>
 
                             <div className="border-t border-line mt-4 pt-4">
-                                <p className="text-xs text-ink/40 mb-2">
+                                <p className="text-xs text-ink/40">
                                     {new Date(
                                         record.createdAt
                                     ).toLocaleString()}
-                                </p>
-
-                                <p className="text-sm text-ink/70 leading-relaxed">
-                                    {record.summary}
                                 </p>
                             </div>
                         </div>

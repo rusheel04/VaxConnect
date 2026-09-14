@@ -1,8 +1,20 @@
+console.log("CALL-E API key loaded:", !!process.env.CALLE_API_KEY);
+console.log(
+    "CALL-E API key prefix:",
+    process.env.CALLE_API_KEY?.slice(0, 8)
+);
+
+
 import { NextResponse } from "next/server";
 import { CalleClient } from "@call-e/calle";
 
+const apiKey = process.env.CALLE_API_KEY;
+
+console.log("CALL-E API key loaded:", !!apiKey);
+console.log("CALL-E API key prefix:", apiKey?.slice(0, 8));
+
 const client = new CalleClient({
-    apiKey: process.env.CALLE_API_KEY!,
+    apiKey: apiKey!,
 });
 
 export async function POST(req: Request) {

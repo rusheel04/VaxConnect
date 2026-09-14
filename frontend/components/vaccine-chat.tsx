@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from "react";
@@ -12,11 +13,15 @@ type Message = {
 const KNOWN_VACCINES = [
     "COVID-19",
     "COVID",
+    "Polio",
+    "OPV",
+    "IPV",
     "HPV",
     "MMR",
     "Hepatitis B",
     "Rabies",
     "Influenza",
+    "Flu",
     "Typhoid",
     "BCG",
     "OPV",
@@ -32,10 +37,37 @@ function detectVaccine(text: string) {
         lower.includes(vaccine.toLowerCase())
     );
 
+    // Common natural-language aliases.
+    if (!found) {
+        if (
+            lower.includes("polio shot") ||
+            lower.includes("polio vaccine") ||
+            lower.includes("polio vaccination")
+        ) {
+            return "Polio";
+        }
+
+        if (
+            lower.includes("flu shot") ||
+            lower.includes("flu vaccine") ||
+            lower.includes("flu vaccination")
+        ) {
+            return "Influenza";
+        }
+    }
+
     if (!found) return "";
 
     if (found === "COVID") {
         return "COVID-19";
+    }
+
+    if (found === "Flu") {
+        return "Influenza";
+    }
+
+    if (found === "OPV" || found === "IPV") {
+        return "Polio";
     }
 
     return found;
@@ -105,7 +137,13 @@ function looksLikeInformationQuestion(text: string) {
     const informationWords = [
         "what is",
         "what are",
+        "what's",
         "tell me about",
+        "can you tell me",
+        "can i",
+        "can adults",
+        "is it safe",
+        "should i",
         "how does",
         "how do",
         "why",
@@ -362,17 +400,17 @@ export default function VaccineChat() {
                         >
                             <div
                                 className={`max-w-[85%] rounded-xl px-4 py-3 ${
-                                    msg.role === "user"
-                                        ? "bg-teal text-white"
-                                        : "border border-line bg-white/60 text-ink"
-                                }`}
+    msg.role === "user"
+        ? "bg-teal text-white"
+        : "border border-line bg-white/60 text-ink"
+}`}
                             >
                                 <p
                                     className={`text-[11px] font-medium mb-1 ${
-                                        msg.role === "user"
-                                            ? "text-white/70"
-                                            : "text-teal"
-                                    }`}
+    msg.role === "user"
+        ? "text-white/70"
+        : "text-teal"
+}`}
                                 >
                                     {msg.role === "user"
                                         ? "YOU"
@@ -524,3 +562,5 @@ export default function VaccineChat() {
         </div>
     );
 }
+
+

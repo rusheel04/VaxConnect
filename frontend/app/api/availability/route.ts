@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import { CalleClient } from "@call-e/calle";
 
@@ -83,7 +84,7 @@ function extractAvailability(result: any): AvailabilityResult {
         ) {
             const priceMatch =
                 answer.match(
-                    /₹\s?[\d,]+(?:\.\d+)?|Rs\.?\s?[\d,]+(?:\.\d+)?/i
+                    /₹\s?[\d,]+(?:\.\d+)?|Rs\.?\s?[\d,]+(?:\.\d+)?|(?:INR\s*)?[\d,]+(?:\.\d+)?\s*(?:rupees|rs\.?)/i
                 );
 
             price =
@@ -96,25 +97,20 @@ function extractAvailability(result: any): AvailabilityResult {
             question.includes("walk-in")
         ) {
             if (
-                answerLower.includes(
-                    "appointment"
-                )
+                answerLower.includes("walk-in") ||
+                answerLower.includes("walk in") ||
+                answerLower.includes("no appointment") ||
+                answerLower.includes("without an appointment")
             ) {
-                appointmentRequired =
-                    answer;
+                appointmentRequired = "Walk-in";
             } else if (
-                answerLower.includes(
-                    "walk-in"
-                ) ||
-                answerLower.includes(
-                    "walk in"
-                )
+                answerLower.includes("appointment") ||
+                answerLower === "yes" ||
+                answerLower.startsWith("yes ")
             ) {
-                appointmentRequired =
-                    "Walk-in";
+                appointmentRequired = "Yes";
             } else {
-                appointmentRequired =
-                    answer;
+                appointmentRequired = answer;
             }
         }
 
@@ -157,7 +153,7 @@ function extractAvailability(result: any): AvailabilityResult {
     if (price === "Not provided") {
         const summaryPrice =
             summary.match(
-                /₹\s?[\d,]+(?:\.\d+)?|Rs\.?\s?[\d,]+(?:\.\d+)?/i
+                /₹\s?[\d,]+(?:\.\d+)?|Rs\.?\s?[\d,]+(?:\.\d+)?|(?:INR\s*)?[\d,]+(?:\.\d+)?\s*(?:rupees|rs\.?)/i
             );
 
         if (summaryPrice) {
@@ -234,25 +230,25 @@ async function makeAvailabilityCall(
     const task = `
 You are calling a vaccination provider on behalf of VaxConnect.
 
-This is an AVAILABILITY enquiry only.
+    This is an AVAILABILITY enquiry only.
 
-DO NOT make an appointment.
-DO NOT book anything.
-DO NOT provide medical advice.
+    DO NOT make an appointment.
+    DO NOT book anything.
+    DO NOT provide medical advice.
 
-Vaccine requested:
-${vaccine}
+    Vaccine requested:
+    ${vaccine}
 
-Ask the provider these four questions:
+Ask the provider these four questions, one at a time, and wait for a clear answer to each:
 
-1. Is the ${vaccine} vaccine currently available?
-2. What is the price?
-3. Is an appointment required, or is walk-in vaccination possible?
-4. What is the earliest available vaccination date and time?
+    1. Ask: "Is the ${vaccine} vaccine currently available right now? Please answer yes or no."
+2. Ask: "What is the exact price per dose? Please state the amount clearly in Indian rupees, for example, 700 rupees." If the answer is unclear, ask: "Could you please repeat the exact price in rupees?"
+3. Ask: "Is an appointment required, or is walk-in vaccination allowed? Please clearly state which one." If unclear, ask the provider to clarify.
+4. Ask: "What is the earliest available vaccination date and time? Please state the date and time clearly." If unclear, ask the provider to repeat the earliest date and time.
 
-Ask these questions naturally and clearly.
+    Do not move to the next question until the current answer is clear enough to record.
 
-IMPORTANT:
+    IMPORTANT:
 - Do not mention or ask about a PIN code.
 - Only report information the provider actually gives you.
 - Never guess availability.
@@ -263,8 +259,8 @@ IMPORTANT:
 - Do not make or confirm an appointment.
 - This call is only an availability enquiry.
 
-After collecting the information, thank the provider and end the call.
-`;
+    After collecting the information, thank the provider and end the call.
+    `;
 
     return await client.calls.createAndWait(
         {
@@ -288,8 +284,8 @@ After collecting the information, thank the provider and end the call.
         {
             idempotencyKey:
                 `vaxconnect-availability-${Date.now()}-${Math.random()
-                    .toString(36)
-                    .slice(2)}`,
+    .toString(36)
+    .slice(2)}`,
         }
     );
 }
@@ -561,7 +557,7 @@ export async function POST(
         const providers = [
             {
                 hospital:
-                    "CALL-E Verified Demo Provider",
+                    "Sunset Hospitals (Demo)",
 
                 provider_id:
                     "calle-live-provider",
