@@ -74,13 +74,30 @@ VaxConnect combines a web application, conversational AI and external-service in
 
 ### Architecture Overview
 
-```text
-                  USER
-                    |
-                    v
-           NEXT.JS FRONTEND
-                    |
-          +---------+---------+
-          |                   |
-          v                   v
-    GEMINI API
+                         USER
+                           |
+                           v
+                   NEXT.JS FRONTEND
+                           |
+                           v
+                    BACKEND API ROUTES
+                           |
+                +----------+----------+
+                |                     |
+                v                     v
+             GEMINI API          MCP CLIENT
+                |                     |
+                |                     v
+                |                 CALL-E MCP
+                |                     |
+                v                     v
+       AI CONVERSATIONAL       VOICE-AGENT WORKFLOW
+          ASSISTANCE                  |
+                |                     |
+                +----------+----------+
+                           |
+                           v
+                   BOOKING WORKFLOW
+                           |
+                           v
+                  EXTERNAL SERVICES
